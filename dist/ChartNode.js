@@ -224,9 +224,9 @@ var ChartNode = function ChartNode(_ref) {
     _service.dragNodeService.clearDragInfo();
     changeHierarchy(JSON.parse(event.dataTransfer.getData("text/plain")), event.currentTarget.id);
   };
-  return _react.default.createElement("li", {
+  return /*#__PURE__*/_react.default.createElement("li", {
     className: "oc-hierarchy"
-  }, _react.default.createElement("div", {
+  }, /*#__PURE__*/_react.default.createElement("div", {
     ref: node,
     id: datasource.id,
     className: nodeClass,
@@ -238,30 +238,30 @@ var ChartNode = function ChartNode(_ref) {
     onDrop: dropHandler,
     onMouseEnter: addArrows,
     onMouseLeave: removeArrows
-  }, NodeTemplate ? _react.default.createElement(NodeTemplate, {
+  }, NodeTemplate ? /*#__PURE__*/_react.default.createElement(NodeTemplate, {
     nodeData: datasource
-  }) : _react.default.createElement(_react.default.Fragment, null, _react.default.createElement("div", {
+  }) : /*#__PURE__*/_react.default.createElement(_react.default.Fragment, null, /*#__PURE__*/_react.default.createElement("div", {
     className: "oc-heading"
-  }, datasource.relationship && datasource.relationship.charAt(2) === "1" && _react.default.createElement("i", {
+  }, datasource.relationship && datasource.relationship.charAt(2) === "1" && /*#__PURE__*/_react.default.createElement("i", {
     className: "oci oci-leader oc-symbol"
-  }), datasource.name), _react.default.createElement("div", {
+  }), datasource.name), /*#__PURE__*/_react.default.createElement("div", {
     className: "oc-content"
-  }, datasource.title)), collapsible && datasource.relationship && datasource.relationship.charAt(0) === "1" && _react.default.createElement("i", {
+  }, datasource.title)), collapsible && datasource.relationship && datasource.relationship.charAt(0) === "1" && /*#__PURE__*/_react.default.createElement("i", {
     className: "oc-edge verticalEdge topEdge oci ".concat(topEdgeExpanded === undefined ? "" : topEdgeExpanded ? "oci-chevron-down" : "oci-chevron-up"),
     onClick: topEdgeClickHandler
-  }), collapsible && datasource.relationship && datasource.relationship.charAt(1) === "1" && _react.default.createElement(_react.default.Fragment, null, _react.default.createElement("i", {
+  }), collapsible && datasource.relationship && datasource.relationship.charAt(1) === "1" && /*#__PURE__*/_react.default.createElement(_react.default.Fragment, null, /*#__PURE__*/_react.default.createElement("i", {
     className: "oc-edge horizontalEdge rightEdge oci ".concat(rightEdgeExpanded === undefined ? "" : rightEdgeExpanded ? "oci-chevron-left" : "oci-chevron-right"),
     onClick: hEdgeClickHandler
-  }), _react.default.createElement("i", {
+  }), /*#__PURE__*/_react.default.createElement("i", {
     className: "oc-edge horizontalEdge leftEdge oci ".concat(leftEdgeExpanded === undefined ? "" : leftEdgeExpanded ? "oci-chevron-right" : "oci-chevron-left"),
     onClick: hEdgeClickHandler
-  })), collapsible && datasource.relationship && datasource.relationship.charAt(2) === "1" && _react.default.createElement("i", {
+  })), collapsible && datasource.relationship && datasource.relationship.charAt(2) === "1" && /*#__PURE__*/_react.default.createElement("i", {
     className: "oc-edge verticalEdge bottomEdge oci ".concat(bottomEdgeExpanded === undefined ? "" : bottomEdgeExpanded ? "oci-chevron-up" : "oci-chevron-down"),
     onClick: bottomEdgeClickHandler
-  })), datasource.children && datasource.children.length > 0 && _react.default.createElement("ul", {
+  })), datasource.children && datasource.children.length > 0 && /*#__PURE__*/_react.default.createElement("ul", {
     className: isChildrenCollapsed ? "hidden" : ""
   }, datasource.children.map(function (node) {
-    return _react.default.createElement(ChartNode, {
+    return /*#__PURE__*/_react.default.createElement(ChartNode, {
       datasource: node,
       NodeTemplate: NodeTemplate,
       id: node.id,
