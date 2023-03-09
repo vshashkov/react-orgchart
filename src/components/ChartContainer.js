@@ -11,7 +11,6 @@ import JSONDigger from "json-digger";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import ChartNode from "./ChartNode";
-import "./ChartContainer.css";
 
 const propTypes = {
   datasource: PropTypes.object.isRequired,
