@@ -3,10 +3,12 @@ import React, {
   useEffect,
   useRef,
   forwardRef,
-  useImperativeHandle
+  useImperativeHandle,
+  useMemo,
+  useCallback
 } from "react";
 import PropTypes from "prop-types";
-import { selectNodeService } from "./service";
+import { dragNodeService, selectNodeService, useDebouncedState } from "./service";
 import JSONDigger from "json-digger";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -25,7 +27,9 @@ const propTypes = {
   collapsible: PropTypes.bool,
   multipleSelect: PropTypes.bool,
   onClickNode: PropTypes.func,
-  onClickChart: PropTypes.func
+  onClickChart: PropTypes.func,
+  onZoomChange: PropTypes.func,
+  onDropNode: PropTypes.func,
 };
 
 const defaultProps = {
@@ -55,7 +59,9 @@ const ChartContainer = forwardRef(
       collapsible,
       multipleSelect,
       onClickNode,
-      onClickChart
+      onClickChart,
+      onZoomChange,
+      onDropNode
     },
     ref
   ) => {
@@ -63,25 +69,38 @@ const ChartContainer = forwardRef(
     const chart = useRef();
     const downloadButton = useRef();
 
-    const [startX, setStartX] = useState(0);
-    const [startY, setStartY] = useState(0);
-    const [transform, setTransform] = useState("");
     const [panning, setPanning] = useState(false);
     const [cursor, setCursor] = useState("default");
     const [exporting, setExporting] = useState(false);
     const [dataURL, setDataURL] = useState("");
     const [download, setDownload] = useState("");
+    const [position, setPosition] = useState({
+      oldX: 0,
+      oldY: 0,
+      x: 0,
+      y: 0,
+      z: 1,
+    });
+    const [scale, setScale] = useState(1);
+    const debouncedScale = useDebouncedState(scale);
 
-    const attachRel = (data, flags) => {
-      data.relationship =
-        flags + (data.children && data.children.length > 0 ? 1 : 0);
+    const attachRel = useCallback((data, flags) => {
+      if (!!data && data.length) {
+        data.forEach(function (item) {
+          attachRel(item, flags === "00" ? flags : "1" + (data.length > 1 ? 1 : 0));
+        });
+      }
+
+      data = Object.assign({}, data)
+      data.relationship = flags + (data.children && data.children.length > 0 ? 1 : 0);
+
       if (data.children) {
-        data.children.forEach(function(item) {
+        data.children.forEach(function (item) {
           attachRel(item, "1" + (data.children.length > 1 ? 1 : 0));
         });
       }
       return data;
-    };
+    }, []);
 
     const [ds, setDS] = useState(datasource);
     useEffect(() => {
@@ -95,48 +114,12 @@ const ChartContainer = forwardRef(
         if (onClickChart) {
           onClickChart();
         }
-        selectNodeService.clearSelectedNodeInfo();
+        selectNodeService.clearSelectedNodes();
       }
     };
 
     const panEndHandler = () => {
-      setPanning(false);
       setCursor("default");
-    };
-
-    const panHandler = e => {
-      let newX = 0;
-      let newY = 0;
-      if (!e.targetTouches) {
-        // pand on desktop
-        newX = e.pageX - startX;
-        newY = e.pageY - startY;
-      } else if (e.targetTouches.length === 1) {
-        // pan on mobile device
-        newX = e.targetTouches[0].pageX - startX;
-        newY = e.targetTouches[0].pageY - startY;
-      } else if (e.targetTouches.length > 1) {
-        return;
-      }
-      if (transform === "") {
-        if (transform.indexOf("3d") === -1) {
-          setTransform("matrix(1,0,0,1," + newX + "," + newY + ")");
-        } else {
-          setTransform(
-            "matrix3d(1,0,0,0,0,1,0,0,0,0,1,0," + newX + ", " + newY + ",0,1)"
-          );
-        }
-      } else {
-        let matrix = transform.split(",");
-        if (transform.indexOf("3d") === -1) {
-          matrix[4] = newX;
-          matrix[5] = newY + ")";
-        } else {
-          matrix[12] = newX;
-          matrix[13] = newY;
-        }
-        setTransform(matrix.join(","));
-      }
     };
 
     const panStartHandler = e => {
@@ -144,63 +127,63 @@ const ChartContainer = forwardRef(
         setPanning(false);
         return;
       } else {
+        e.preventDefault();
         setPanning(true);
-        setCursor("move");
-      }
-      let lastX = 0;
-      let lastY = 0;
-      if (transform !== "") {
-        let matrix = transform.split(",");
-        if (transform.indexOf("3d") === -1) {
-          lastX = parseInt(matrix[4]);
-          lastY = parseInt(matrix[5]);
-        } else {
-          lastX = parseInt(matrix[12]);
-          lastY = parseInt(matrix[13]);
-        }
-      }
-      if (!e.targetTouches) {
-        // pand on desktop
-        setStartX(e.pageX - lastX);
-        setStartY(e.pageY - lastY);
-      } else if (e.targetTouches.length === 1) {
-        // pan on mobile device
-        setStartX(e.targetTouches[0].pageX - lastX);
-        setStartY(e.targetTouches[0].pageY - lastY);
-      } else if (e.targetTouches.length > 1) {
-        return;
+        setPosition({
+          ...position,
+          oldX: e.clientX,
+          oldY: e.clientY
+        });
       }
     };
 
-    const updateChartScale = newScale => {
-      let matrix = [];
-      let targetScale = 1;
-      if (transform === "") {
-        setTransform("matrix(" + newScale + ", 0, 0, " + newScale + ", 0, 0)");
-      } else {
-        matrix = transform.split(",");
-        if (transform.indexOf("3d") === -1) {
-          targetScale = Math.abs(window.parseFloat(matrix[3]) * newScale);
-          if (targetScale > zoomoutLimit && targetScale < zoominLimit) {
-            matrix[0] = "matrix(" + targetScale;
-            matrix[3] = targetScale;
-            setTransform(matrix.join(","));
-          }
-        } else {
-          targetScale = Math.abs(window.parseFloat(matrix[5]) * newScale);
-          if (targetScale > zoomoutLimit && targetScale < zoominLimit) {
-            matrix[0] = "matrix3d(" + targetScale;
-            matrix[5] = targetScale;
-            setTransform(matrix.join(","));
-          }
+    useEffect(() => {
+      const mouseup = () => {
+        setPanning(false);
+      };
+      const mousemove = (event) => {
+        if (panning) {
+          setPosition({
+            ...position,
+            x: position.x + event.clientX - position.oldX,
+            y: position.y + event.clientY - position.oldY,
+            oldX: event.clientX,
+            oldY: event.clientY,
+          });
         }
-      }
-    };
+      };
+      window.addEventListener('mouseup', mouseup);
+      window.addEventListener('mousemove', mousemove);
+      return () => {
+        window.removeEventListener('mouseup', mouseup);
+        window.removeEventListener('mousemove', mousemove);
+      };
+    });
 
     const zoomHandler = e => {
-      let newScale = 1 + (e.deltaY > 0 ? -0.2 : 0.2);
-      updateChartScale(newScale);
+      if (e.deltaY) {
+        const sign = Math.sign(e.deltaY) / 100;
+        const scale = 1 - sign;
+        const rect = container.current.getBoundingClientRect();
+        const chartEl = container.current.getBoundingClientRect();
+        
+        const targetScale = position.z * scale;
+        if (targetScale > zoomoutLimit && targetScale < zoominLimit) {
+          setPosition({
+            ...position,
+            x: position.x * scale - (rect.width / 2 - e.clientX + rect.x) * sign,
+            y: position.y * scale - (chartEl.height * rect.width / chartEl.width / 2 - e.clientY + rect.y) * sign,
+            z: targetScale,
+          });
+          setScale(targetScale);
+        }
+      }
     };
+    
+    useEffect(() => {
+      onZoomChange && onZoomChange(debouncedScale);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedScale])
 
     const exportPDF = (canvas, exportFilename) => {
       const canvasWidth = Math.floor(canvas.width);
@@ -208,15 +191,15 @@ const ChartContainer = forwardRef(
       const doc =
         canvasWidth > canvasHeight
           ? new jsPDF({
-              orientation: "landscape",
-              unit: "px",
-              format: [canvasWidth, canvasHeight]
-            })
+            orientation: "landscape",
+            unit: "px",
+            format: [canvasWidth, canvasHeight]
+          })
           : new jsPDF({
-              orientation: "portrait",
-              unit: "px",
-              format: [canvasHeight, canvasWidth]
-            });
+            orientation: "portrait",
+            unit: "px",
+            format: [canvasHeight, canvasWidth]
+          });
       doc.addImage(canvas.toDataURL("image/jpeg", 1.0), "JPEG", 0, 0);
       doc.save(exportFilename + ".pdf");
     };
@@ -242,6 +225,8 @@ const ChartContainer = forwardRef(
       await dsDigger.removeNode(draggedItemData.id);
       await dsDigger.addChildren(dropTargetId, draggedItemData);
       setDS({ ...dsDigger.ds });
+
+      return { ...dsDigger.ds };
     };
 
     useImperativeHandle(ref, () => ({
@@ -256,7 +241,7 @@ const ChartContainer = forwardRef(
         html2canvas(chart.current, {
           width: chart.current.clientWidth,
           height: chart.current.clientHeight,
-          onclone: function(clonedDoc) {
+          onclone: function (clonedDoc) {
             clonedDoc.querySelector(".orgchart").style.background = "none";
             clonedDoc.querySelector(".orgchart").style.transform = "";
           }
@@ -290,8 +275,25 @@ const ChartContainer = forwardRef(
               "isAncestorsCollapsed"
             );
           });
+      },
+      setZoom: (newScale) => {
+        if (newScale < zoomoutLimit) {
+          newScale = zoomoutLimit
+        }
+        if (newScale > zoominLimit) {
+          newScale = zoominLimit;
+        }
+        setPosition((position) => ({ ...position, z: newScale }))
+      },
+      getChart: () => {
+        return ds.children;
+      },
+      resetPosition: () => {
+        setPosition({ oldX: 0, oldY: 0, x: 0, y: 0, z: 0 })
       }
     }));
+
+    const dsWithAttachedRel = useMemo(() => attachRel(ds, "00"), [attachRel, ds]);
 
     return (
       <div
@@ -303,21 +305,37 @@ const ChartContainer = forwardRef(
         <div
           ref={chart}
           className={"orgchart " + chartClass}
-          style={{ transform: transform, cursor: cursor }}
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${position.z})`,
+            cursor: cursor,
+          }}
           onClick={clickChartHandler}
           onMouseDown={pan ? panStartHandler : undefined}
-          onMouseMove={pan && panning ? panHandler : undefined}
         >
           <ul>
-            <ChartNode
-              datasource={attachRel(ds, "00")}
-              NodeTemplate={NodeTemplate}
-              draggable={draggable}
-              collapsible={collapsible}
-              multipleSelect={multipleSelect}
-              changeHierarchy={changeHierarchy}
-              onClickNode={onClickNode}
-            />
+            {!!dsWithAttachedRel && dsWithAttachedRel.length ? dsWithAttachedRel.map((_ds) => (
+              <ChartNode
+                datasource={_ds}
+                NodeTemplate={NodeTemplate}
+                draggable={draggable}
+                collapsible={collapsible}
+                multipleSelect={multipleSelect}
+                changeHierarchy={changeHierarchy}
+                onClickNode={onClickNode}
+                onDropNode={onDropNode}
+              />
+            )) : (
+              <ChartNode
+                datasource={dsWithAttachedRel}
+                NodeTemplate={NodeTemplate}
+                draggable={draggable}
+                collapsible={collapsible}
+                multipleSelect={multipleSelect}
+                changeHierarchy={changeHierarchy}
+                onClickNode={onClickNode}
+                onDropNode={onDropNode}
+              />
+            )}
           </ul>
         </div>
         <a
@@ -338,5 +356,7 @@ const ChartContainer = forwardRef(
 
 ChartContainer.propTypes = propTypes;
 ChartContainer.defaultProps = defaultProps;
+ChartContainer.selectNodeService = selectNodeService;
+ChartContainer.dragNodeService = dragNodeService;
 
 export default ChartContainer;
